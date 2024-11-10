@@ -5,6 +5,7 @@ from torch import nn
 from PIL import Image
 from transformers import AutoProcessor, AutoModelForZeroShotObjectDetection
 import io
+import os
 
 from ai_hack.models import Embedder
 from transformers import ViTImageProcessor, ViTModel
@@ -45,14 +46,13 @@ def set_png_as_page_bg(png_file):
     st.markdown(page_bg_img, unsafe_allow_html=True)
 
 
+set_png_as_page_bg('eagle_blur.png')
 
 
 st.title("AI Integration")
 on = st.toggle("Скриншот")
 
-checkpoint_path = "../hk-lasdksjdsak-rk/epochs/checkpoint_epoch_26.pth" ###################
-index_path = "faiss_index.index" ###################
-paths_map_path = "image_paths.pkl"
+from config import *
 dimension = 64
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -64,15 +64,15 @@ trunk = nn.DataParallel(trunk).to(device)
 embedder = nn.DataParallel(Embedder(input_dim=trunk_output_size,
                                         embedding_dim=dimension)).to(device)
 models = {'trunk': trunk, 'embedder': embedder}
-checkpoint = torch.load(checkpoint_path)
+checkpoint = torch.load(MODEL_CHECKPOINT_PATH, map_location=torch.device(device))
 models['trunk'].load_state_dict(checkpoint['trunk_state_dict'])
 models['embedder'].load_state_dict(checkpoint['embedder_state_dict'])
 
 
-index = faiss.read_index(index_path)
+index = faiss.read_index(FAISS_INDEX_PATH)
 
 # Загрузка словаря путей изображений
-with open(paths_map_path, 'rb') as f:
+with open(IMAGE_IDX_MAP_PATH, 'rb') as f:
     image_paths = pickle.load(f)
 
 def get_embedding(image):
@@ -101,7 +101,6 @@ if on:
         st.image(screen)
 
         model_id = "IDEA-Research/grounding-dino-tiny"
-        device = "cuda" if torch.cuda.is_available() else "cpu"
 
         processor = AutoProcessor.from_pretrained(model_id)
         model = AutoModelForZeroShotObjectDetection.from_pretrained(model_id).to(device)
@@ -159,11 +158,12 @@ else:
     pic = st.file_uploader(label="")
     if pic:
         st.image(pic)
-
+        pic = convert_png_to_jpg(pic)
+        image = Image.open(pic)
         st.header("\nРанжированные смысловые копии:")
         cols = st.columns(2)
 
-        copies = get_copies()
+        copies = get_copies(image, image_paths)
 
         i = 0
         for copy in copies:

@@ -13,19 +13,14 @@ from transformers import ViTImageProcessor, ViTModel
 
 from ai_hack.models import Embedder
 
+from config import *
+
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Script for creating vector index")
-    parser.add_argument("--dataset_path", type=str, required=True, help="dataset_path")
-    parser.add_argument("--checkpoint_path", type=str, required=True, help="checkpoint_path")
-    args = parser.parse_args()
-
-    dataset_path = args.dataset_path
-    checkpoint_path = args.checkpoint_path
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     dimension = 64
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
 
     image_processor = ViTImageProcessor.from_pretrained('facebook/dino-vits16')
     trunk = ViTModel.from_pretrained('facebook/dino-vits16')
@@ -34,7 +29,7 @@ if __name__ == "__main__":
     embedder = nn.DataParallel(Embedder(input_dim=trunk_output_size, 
                                         embedding_dim=dimension)).to(device)
     models = {'trunk': trunk, 'embedder': embedder}
-    checkpoint = torch.load(args.checkpoint_path)
+    checkpoint = torch.load(MODEL_CHECKPOINT_PATH)
     models['trunk'].load_state_dict(checkpoint['trunk_state_dict'])
     models['embedder'].load_state_dict(checkpoint['embedder_state_dict'])
 
@@ -50,8 +45,9 @@ if __name__ == "__main__":
 
     index = faiss.index_factory(dimension, "Flat", faiss.METRIC_INNER_PRODUCT)
     image_paths = {}
+    
     idx = 0
-    for root, dirs, files in os.walk(args.dataset_path):
+    for root, dirs, files in os.walk(DATASET_PATH):
         print(dirs)
         print(files)
         for filename in files:
@@ -65,6 +61,6 @@ if __name__ == "__main__":
                 idx += 1
 
 
-    faiss.write_index(index, 'faiss_index.index')
-    with open('image_paths.pkl', 'wb') as f:
+    faiss.write_index(index, FAISS_INDEX_PATH)
+    with open(IMAGE_IDX_MAP_PATH, 'wb') as f:
         pickle.dump(image_paths, f)
